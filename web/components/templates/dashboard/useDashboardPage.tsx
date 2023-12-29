@@ -1,33 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { Metrics } from "../../../lib/api/metrics/metrics";
+import { UseQueryResult } from "@tanstack/react-query";
 import { OverTimeRequestQueryParams } from "../../../lib/api/metrics/timeDataHandlerWrapper";
-import { Result } from "../../../lib/result";
+import { Result, resultMap } from "../../../lib/result";
 import {
   RequestsOverTime,
   TimeIncrement,
 } from "../../../lib/timeCalculations/fetchTimeData";
-import { getTimeInterval } from "../../../lib/timeCalculations/time";
 import { CostOverTime } from "../../../pages/api/metrics/costOverTime";
 import { ErrorOverTime } from "../../../pages/api/metrics/errorOverTime";
-import { useGetProperties } from "../../../services/hooks/properties";
-import { useGetPropertyParams } from "../../../services/hooks/propertyParams";
+
+import { getTokensPerRequest } from "../../../lib/api/metrics/averageTokensPerRequest";
+import { UnPromise } from "../../../lib/tsxHelpers";
+import {
+  BackendMetricsCall,
+  useBackendMetricCall,
+} from "../../../services/hooks/useBackendFunction";
 import {
   FilterLeaf,
-  filterListToTree,
-  FilterNode,
   filterUIToFilterLeafs,
-  parseKey,
 } from "../../../services/lib/filters/filterDefs";
 import {
-  getPropertyFilters,
-  requestTableFilters,
+  DASHBOARD_PAGE_TABLE_FILTERS,
   SingleFilterDef,
 } from "../../../services/lib/filters/frontendFilterDefs";
 import { UIFilterRow } from "../../shared/themed/themedAdvancedFilters";
-import { useMemo } from "react";
+import { LatencyOverTime } from "../../../pages/api/metrics/latencyOverTime";
+import { UsersOverTime } from "../../../pages/api/metrics/usersOverTime";
 
-async function fetchDataOverTime<T>(
+export async function fetchDataOverTime<T>(
   timeFilter: {
     start: Date;
     end: Date;
@@ -53,211 +52,153 @@ async function fetchDataOverTime<T>(
     body: JSON.stringify(body),
   }).then((res) => res.json() as Promise<Result<T[], string>>);
 }
-interface DashboardPageData {
+
+export interface DashboardPageData {
   timeFilter: {
     start: Date;
     end: Date;
   };
   uiFilters: UIFilterRow[];
   apiKeyFilter: string | null;
+  timeZoneDifference: number;
+  dbIncrement: TimeIncrement;
 }
 
 export const useDashboardPage = ({
   timeFilter,
   uiFilters,
   apiKeyFilter,
+  timeZoneDifference,
+  dbIncrement,
 }: DashboardPageData) => {
-  const { properties } = useGetProperties();
-  const { propertyParams } = useGetPropertyParams();
-  const filterMap = (requestTableFilters as SingleFilterDef<any>[]).concat(
-    getPropertyFilters(
-      properties,
-      propertyParams.map((p) => ({
-        param: p.property_param,
-        key: p.property_key,
-      }))
-    )
-  );
+  const filterMap = DASHBOARD_PAGE_TABLE_FILTERS as SingleFilterDef<any>[];
+
   const userFilters =
     apiKeyFilter !== null
       ? filterUIToFilterLeafs(filterMap, uiFilters).concat([
-          parseKey(apiKeyFilter),
+          {
+            response_copy_v3: {
+              auth_hash: {
+                equals: apiKeyFilter,
+              },
+            },
+          },
         ])
       : filterUIToFilterLeafs(filterMap, uiFilters);
 
-  const memoizedTimeFilter = timeFilter;
+  const params: BackendMetricsCall<any>["params"] = {
+    timeFilter,
+    userFilters,
+    dbIncrement,
+    timeZoneDifference,
+  };
 
-  const ret = {
-    filterMap,
-    metrics: useQuery({
-      queryKey: ["dashboardDataMetrics", memoizedTimeFilter, userFilters],
-      queryFn: async (query) => {
-        console.log("fetching metrics");
-        const timeFilter = query.queryKey[1] as {
-          start: Date;
-          end: Date;
-        };
-        const userFilters = query.queryKey[2] as FilterLeaf[];
-        const filter: FilterNode = {
-          right: {
-            left: {
-              request: {
-                created_at: {
-                  gte: timeFilter.start.toISOString(),
-                },
-              },
-            },
-            operator: "and",
-            right: {
-              request: {
-                created_at: {
-                  lte: timeFilter.end.toISOString(),
-                },
-              },
-            },
-          },
-          operator: "and",
-          left: filterListToTree(userFilters, "and"),
-        };
-        return fetch("/api/metrics", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(filter),
-        })
-          .then((res) => res.json() as Promise<Result<Metrics, string>>)
-          .then(({ data, error }) => {
-            if (error !== null) {
-              console.error(error);
-              return { data, error };
-            } else {
-              return {
-                data: {
-                  ...data,
-                  last_request: new Date(data.last_request),
-                  first_request: new Date(data.first_request),
-                },
-                error,
-              };
-            }
-          });
+  const overTimeData = {
+    errors: useBackendMetricCall<Result<ErrorOverTime[], string>>({
+      params,
+      endpoint: "/api/metrics/errorOverTime",
+      key: "errorOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({ count: +d.count, time: new Date(d.time) }))
+        );
       },
-      refetchOnWindowFocus: false,
     }),
-    errorsOverTime: useQuery({
-      queryKey: [
-        "dashboardDataErrorsOverTime",
-        memoizedTimeFilter,
-        userFilters,
-      ],
-      queryFn: async (query) => {
-        const timeFilter = query.queryKey[1] as {
-          start: Date;
-          end: Date;
-        };
-        const userFilters = query.queryKey[2] as FilterLeaf[];
-        const timeInterval = getTimeInterval(timeFilter);
-
-        return fetchDataOverTime<ErrorOverTime>(
-          timeFilter,
-          userFilters,
-          timeInterval,
-          "errorOverTime"
-        ).then(({ data, error }) => {
-          if (error !== null) {
-            console.error(error);
-            return { data, error };
-          } else {
-            return {
-              data: data.map((d) => ({
-                count: +d.count,
-                time: new Date(d.time),
-              })),
-              error,
-            };
-          }
-        });
+    requests: useBackendMetricCall<Result<RequestsOverTime[], string>>({
+      params,
+      endpoint: "/api/metrics/requestOverTime",
+      key: "requestOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({ count: +d.count, time: new Date(d.time) }))
+        );
       },
-      refetchOnWindowFocus: false,
     }),
-    requestsOverTime: useQuery({
-      queryKey: [
-        "dashboardDataRequestsOverTime",
-        memoizedTimeFilter,
-        userFilters,
-      ],
-      queryFn: async (query) => {
-        const timeFilter = query.queryKey[1] as {
-          start: Date;
-          end: Date;
-        };
-        const userFilters = query.queryKey[2] as FilterLeaf[];
-        const timeInterval = getTimeInterval(timeFilter);
-
-        return fetchDataOverTime<RequestsOverTime>(
-          timeFilter,
-          userFilters,
-          timeInterval,
-          "requestOverTime"
-        ).then(({ data, error }) => {
-          if (error !== null) {
-            console.error(error);
-            return { data, error };
-          } else {
-            return {
-              data: data.map((d) => ({
-                count: +d.count,
-                time: new Date(d.time),
-              })),
-              error,
-            };
-          }
-        });
+    requestsWithStatus: useBackendMetricCall<
+      Result<(RequestsOverTime & { status: number })[], string>
+    >({
+      params,
+      endpoint: "/api/metrics/requestStatusOverTime",
+      key: "requestOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({
+            count: +d.count,
+            time: new Date(d.time),
+            status: d.status,
+          }))
+        );
       },
-      refetchOnWindowFocus: false,
     }),
-    costOverTime: useQuery({
-      queryKey: ["dashboardDataCostsOverTime", memoizedTimeFilter, userFilters],
-      queryFn: async (query) => {
-        const timeFilter = query.queryKey[1] as {
-          start: Date;
-          end: Date;
-        };
-        const userFilters = query.queryKey[2] as FilterLeaf[];
-        const timeInterval = getTimeInterval(timeFilter);
-
-        return fetchDataOverTime<CostOverTime>(
-          timeFilter,
-          userFilters,
-          timeInterval,
-          "costOverTime"
-        ).then(({ data, error }) => {
-          if (error !== null) {
-            console.error(error);
-            return { data, error };
-          } else {
-            return {
-              data: data.map((d) => ({
-                cost: +d.cost,
-                time: new Date(d.time),
-              })),
-              error,
-            };
-          }
-        });
+    costs: useBackendMetricCall<Result<CostOverTime[], string>>({
+      params,
+      endpoint: "/api/metrics/costOverTime",
+      key: "costOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({ cost: +d.cost, time: new Date(d.time) }))
+        );
       },
-      refetchOnWindowFocus: false,
+    }),
+    latency: useBackendMetricCall<Result<LatencyOverTime[], string>>({
+      params,
+      endpoint: "/api/metrics/latencyOverTime",
+      key: "latencyOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({ duration: +d.duration, time: new Date(d.time) }))
+        );
+      },
+    }),
+    users: useBackendMetricCall<Result<UsersOverTime[], string>>({
+      params,
+      endpoint: "/api/metrics/usersOverTime",
+      key: "usersOverTime",
+      postProcess: (data) => {
+        return resultMap(data, (d) =>
+          d.map((d) => ({ count: +d.count, time: new Date(d.time) }))
+        );
+      },
     }),
   };
-  const isLoading =
-    ret.metrics.isLoading ||
-    ret.errorsOverTime.isLoading ||
-    ret.requestsOverTime.isLoading ||
-    ret.costOverTime.isLoading;
+
+  const metrics = {
+    totalCost: useBackendMetricCall<Result<number, string>>({
+      params,
+      endpoint: "/api/metrics/totalCost",
+    }),
+    totalRequests: useBackendMetricCall<Result<number, string>>({
+      params,
+      endpoint: "/api/metrics/totalRequests",
+    }),
+    averageLatency: useBackendMetricCall<Result<number, string>>({
+      params,
+      endpoint: "/api/metrics/averageLatency",
+    }),
+    averageTokensPerRequest: useBackendMetricCall<
+      UnPromise<ReturnType<typeof getTokensPerRequest>>
+    >({
+      params,
+      endpoint: "/api/metrics/averageTokensPerRequest",
+    }),
+    activeUsers: useBackendMetricCall<Result<number, string>>({
+      params,
+      endpoint: "/api/metrics/activeUsers",
+    }),
+  };
+
+  function isLoading(x: UseQueryResult<any>) {
+    return x.isLoading || x.isFetching;
+  }
+
+  const isAnyLoading =
+    Object.values(overTimeData).some(isLoading) ||
+    Object.values(metrics).some(isLoading);
 
   return {
-    ...ret,
-    isLoading,
+    filterMap,
+    metrics,
+    overTimeData,
+    isAnyLoading,
   };
 };

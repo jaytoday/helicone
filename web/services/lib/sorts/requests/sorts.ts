@@ -6,9 +6,12 @@ const isValidSortDirection = (sort: SortDirection) => {
 
 export interface SortLeafRequest {
   created_at?: SortDirection;
+  cache_created_at?: SortDirection;
   latency?: SortDirection;
   last_active?: SortDirection;
   total_tokens?: SortDirection;
+  completion_tokens?: SortDirection;
+  prompt_tokens?: SortDirection;
   user_id?: SortDirection;
   body_model?: SortDirection;
   is_cached?: SortDirection;
@@ -29,18 +32,33 @@ function assertValidSortDirection(direction: SortDirection) {
 }
 
 export function buildRequestSort(sort: SortLeafRequest) {
+  if (sort.cache_created_at) {
+    assertValidSortDirection(sort.cache_created_at);
+    return `cache_hits.created_at ${sort.cache_created_at}`;
+  }
   if (sort.created_at) {
     assertValidSortDirection(sort.created_at);
     return `request.created_at ${sort.created_at}`;
   }
   if (sort.latency) {
     assertValidSortDirection(sort.latency);
-    return `response.created_at - request.created_at ${sort.latency}`;
+    return `response.delay_ms ${sort.latency}`;
   }
   if (sort.total_tokens) {
     assertValidSortDirection(sort.total_tokens);
-    return `(coalesce((response.body ->'usage'->>'total_tokens')::int, 0))::int ${sort.total_tokens}`;
+    return `(response.prompt_tokens + response.completion_tokens) ${sort.total_tokens}`;
   }
+
+  if (sort.completion_tokens) {
+    assertValidSortDirection(sort.completion_tokens);
+    return `response.completion_tokens ${sort.completion_tokens}`;
+  }
+
+  if (sort.prompt_tokens) {
+    assertValidSortDirection(sort.prompt_tokens);
+    return `response.prompt_tokens ${sort.prompt_tokens}`;
+  }
+
   if (sort.user_id) {
     assertValidSortDirection(sort.user_id);
     return `request.user_id ${sort.user_id}`;
@@ -82,4 +100,72 @@ export function buildRequestSort(sort: SortLeafRequest) {
       return `(request.prompt_values ->> '${key}')::text ${sort.values[key]}`;
     }
   }
+}
+
+export interface SortLeafJob {
+  created_at?: SortDirection;
+  updated_at?: SortDirection;
+  timeout_seconds?: SortDirection;
+  name?: SortDirection;
+  description?: SortDirection;
+  status?: SortDirection;
+  org_id?: SortDirection;
+  job_id?: SortDirection;
+  node_id?: SortDirection;
+  custom_properties?: {
+    [key: string]: SortDirection;
+  };
+}
+
+export function buildJobSort(sort: SortLeafJob): string {
+  if (sort.created_at) {
+    assertValidSortDirection(sort.created_at);
+    return `job.created_at ${sort.created_at}`;
+  }
+  if (sort.updated_at) {
+    assertValidSortDirection(sort.updated_at);
+    return `job.updated_at ${sort.updated_at}`;
+  }
+  if (sort.timeout_seconds) {
+    assertValidSortDirection(sort.timeout_seconds);
+    return `job.timeout_seconds ${sort.timeout_seconds}`;
+  }
+  if (sort.name) {
+    assertValidSortDirection(sort.name);
+    return `job.name ${sort.name}`;
+  }
+  if (sort.description) {
+    assertValidSortDirection(sort.description);
+    return `job.description ${sort.description}`;
+  }
+  if (sort.status) {
+    assertValidSortDirection(sort.status);
+    return `job.status ${sort.status}`;
+  }
+  if (sort.org_id) {
+    assertValidSortDirection(sort.org_id);
+    return `job.organization_id ${sort.org_id}`;
+  }
+  if (sort.job_id) {
+    assertValidSortDirection(sort.job_id);
+    return `job.job_id ${sort.job_id}`;
+  }
+  if (sort.node_id) {
+    assertValidSortDirection(sort.node_id);
+    return `job.node_id ${sort.node_id}`;
+  }
+
+  if (sort.custom_properties) {
+    for (const key in sort.custom_properties) {
+      assertValidSortDirection(sort.custom_properties[key]);
+      // ensure key is alphanumeric
+      if (!key.match(/^[a-zA-Z0-9_]+$/)) {
+        throw new Error(`Invalid property key: ${key}`);
+      }
+      return `(job.custom_properties ->> '${key}')::text ${sort.custom_properties[key]}`;
+    }
+  }
+
+  // Return a default value if none of the conditions are met
+  return "";
 }

@@ -1,6 +1,4 @@
-import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { useQuery } from "@tanstack/react-query";
-import { Column } from "../../components/ThemedTableV2";
 
 import { UserMetric } from "../../lib/api/users/users";
 import { Result } from "../../lib/result";
@@ -44,15 +42,19 @@ const useUsers = (
         }).then((res) => res.json() as Promise<Result<number, string>>),
       ]);
 
-      return [response, count] as [
-        Result<UserMetric[], string>,
-        Result<number, string>
-      ];
+      return {
+        response,
+        count,
+      };
     },
     refetchOnWindowFocus: false,
   });
 
-  const [response, count] = data || [null, null];
+  const { response, count } = data || {
+    response: undefined,
+    count: undefined,
+    dailyActiveUsers: undefined,
+  };
 
   const users = response?.data || [];
   const from = (currentPage - 1) * currentPageSize;

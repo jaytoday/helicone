@@ -1,27 +1,28 @@
 import { useHeliconeKeys } from "../../../services/hooks/helicone-keys";
-import { useGetKeys } from "../../../services/hooks/keys";
 
 const useKeysPage = () => {
-  const {
-    count,
-    isLoading: isKeysLoading,
-    keys,
-    refetch: refetchKeys,
-  } = useGetKeys();
-
   const {
     keys: heliconeKeys,
     isLoading: isHeliconeKeysLoading,
     refetch: refetchHeliconeKeys,
   } = useHeliconeKeys();
 
-  const isLoading = isKeysLoading || isHeliconeKeysLoading;
+  const isLoading = isHeliconeKeysLoading;
+  heliconeKeys?.data?.sort((a, b) => {
+    const aDate = new Date(a.created_at);
+    const bDate = new Date(b.created_at);
+
+    if (aDate > bDate) {
+      return 1;
+    } else if (bDate > aDate) {
+      return -1;
+    } else {
+      return 0;
+    }
+  });
 
   return {
-    count,
     isLoading,
-    keys,
-    refetchKeys,
     heliconeKeys,
     refetchHeliconeKeys,
   };

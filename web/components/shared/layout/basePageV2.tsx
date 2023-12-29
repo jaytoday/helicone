@@ -1,10 +1,7 @@
-import Link from "next/link";
-import { SVGProps, useState } from "react";
-import ThemedModal from "../themed/themedModal";
-import Login from "../auth/login";
-import NavBarV2 from "./navBarV2";
+import { SVGProps } from "react";
 import { BsDiscord } from "react-icons/bs";
-import { AiOutlineCalendar } from "react-icons/ai";
+import Footer from "./footer";
+import NavBarV2 from "./navbar/navBarV2";
 
 const meta = {
   social: [
@@ -49,63 +46,14 @@ interface BasePageV2Props {
 const BasePageV2 = (props: BasePageV2Props) => {
   const { children } = props;
 
-  const [openOnboarding, setOpenOnboarding] = useState(false);
-  const [openLogin, setOpenLogin] = useState(false);
-
   return (
     <>
       <div className="bg-white">
-        <NavBarV2
-          setOpenLogin={setOpenLogin}
-          setOpenOnboarding={setOpenOnboarding}
-          socials={meta.social}
-        />
+        <NavBarV2 />
 
         <main>{children}</main>
-        <footer className="bg-gray-50" aria-labelledby="footer-heading">
-          <h2 id="footer-heading" className="sr-only">
-            Footer
-          </h2>
-          <div className="mx-auto max-w-7xl px-6 pb-8 lg:px-8">
-            <div className="pt-8 md:flex md:items-center md:justify-between">
-              <div className="flex space-x-6 md:order-2">
-                {meta.social.map((item) => (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <span className="sr-only">{item.name}</span>
-                    <item.icon className="h-6 w-6" aria-hidden="true" />
-                  </a>
-                ))}
-              </div>
-              <div className="mt-8 text-xs sm:text-base text-gray-400 md:order-1 md:mt-0 flex flex-row gap-4">
-                <span className="hidden sm:inline">
-                  &copy; 2023 Helicone, Inc. All rights reserved.
-                </span>
-                <span className="inline sm:hidden">
-                  &copy; 2023 Helicone, Inc.
-                </span>
-                <Link href={"/privacy"} className="hover:text-black">
-                  Privacy Policy
-                </Link>
-                <Link href={"/terms"} className="hover:text-black">
-                  Terms of Use
-                </Link>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
-      <ThemedModal open={openOnboarding} setOpen={setOpenOnboarding}>
-        <Login formState="signup" />
-      </ThemedModal>
-      <ThemedModal open={openLogin} setOpen={setOpenLogin}>
-        <Login formState="login" />
-      </ThemedModal>
     </>
   );
 };

@@ -5,11 +5,10 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { clsx } from "./shared/clsx";
 import { useRouter } from "next/router";
-import { ArrowsUpDownIcon, ArrowUpIcon } from "@heroicons/react/24/outline";
+import { ArrowUpIcon } from "@heroicons/react/24/outline";
 
 import {
   SortDirection,
@@ -27,7 +26,7 @@ export interface Column {
   type?: ColumnType;
   filter?: boolean;
   sortBy?: SortDirection;
-  columnOrigin?: "property" | "value";
+  columnOrigin?: "property" | "value" | "feedback";
   minWidth?: number;
   align?: "center" | "inherit" | "left" | "right" | "justify";
   toSortLeaf?: (direction: SortDirection) => SortLeafRequest | SortLeafUsers;

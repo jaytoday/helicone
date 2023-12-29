@@ -1,77 +1,22 @@
-import { SupabaseClient, User } from "@supabase/supabase-js";
-import { FilterNode } from "../../../services/lib/filters/filterDefs";
-import { buildFilter } from "../../../services/lib/filters/filters";
-
-import { Result, unwrap } from "../../result";
-import {
-  isValidTimeIncrement,
-  isValidTimeZoneDifference,
-} from "../../sql/timeHelpers";
-import { TimeIncrement } from "../../timeCalculations/fetchTimeData";
-import { dbExecute } from "../db/dbExecute";
-
+import { Result, resultMap } from "../../result";
+import { RequestsOverTime } from "../../timeCalculations/fetchTimeData";
+import { getXOverTime } from "./getXOverTime";
 import { DataOverTimeRequest } from "./timeDataHandlerWrapper";
 
-export interface GetTimeDataOptions {
-  filter: FilterNode;
-  dbIncrement: TimeIncrement;
-}
-
-export interface AuthClient {
-  client: SupabaseClient;
-  user: User;
-}
-
-export interface DateCountDBModel {
-  created_at_trunc: Date;
-  count: number;
-}
-
-export async function getTotalRequestsOverTime({
-  timeFilter,
-  userFilter,
-  userId,
-  dbIncrement,
-  timeZoneDifference,
-}: DataOverTimeRequest): Promise<Result<DateCountDBModel[], string>> {
-  const filter: FilterNode = userFilter;
-  if (!isValidTimeIncrement(dbIncrement)) {
-    return { data: null, error: "Invalid time increment" };
-  }
-  if (!isValidTimeZoneDifference(timeZoneDifference)) {
-    return { data: null, error: "Invalid time zone difference" };
-  }
-  const builtFilter = buildFilter(filter, []);
-  const dateTrunc = `DATE_TRUNC('${dbIncrement}', request.created_at + INTERVAL '${timeZoneDifference} minutes')`;
-  const query = `
-SELECT
-  ${dateTrunc} as created_at_trunc,
-  COUNT(*)::bigint as count
-FROM request
-   LEFT JOIN response ON response.request = request.id
-   LEFT JOIN user_api_keys ON user_api_keys.api_key_hash = request.auth_hash
-WHERE (
-  user_api_keys.user_id = '${userId}'
-  AND (${builtFilter.filter})
-)
-GROUP BY ${dateTrunc}
-ORDER BY created_at_trunc
-`;
-
-  const { data, error } = await dbExecute<DateCountDBModel>(
-    query,
-    builtFilter.argsAcc
-  );
-  if (error !== null) {
-    return { data: null, error: error };
-  }
-  return {
-    data: data.map((d) => ({
-      created_at_trunc: new Date(
-        d.created_at_trunc.getTime() - timeZoneDifference * 60 * 1000
-      ),
+export async function getTotalRequestsOverTime(
+  data: DataOverTimeRequest,
+  groupByColumns: string[] = [],
+  printQuery = false
+): Promise<Result<RequestsOverTime[], string>> {
+  const res = await getXOverTime<{
+    count: number;
+    status: number;
+  }>(data, "count(*) as count", groupByColumns, printQuery);
+  return resultMap(res, (resData) =>
+    resData.map((d) => ({
+      time: new Date(new Date(d.created_at_trunc).getTime()),
       count: Number(d.count),
-    })),
-    error: null,
-  };
+      status: Number(d.status),
+    }))
+  );
 }

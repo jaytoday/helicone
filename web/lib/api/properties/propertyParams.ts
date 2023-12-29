@@ -1,27 +1,69 @@
-import { SupabaseClient } from "@supabase/auth-helpers-nextjs";
-import { getPagination } from "../../../components/shared/getPagination";
-import { dbExecute } from "../db/dbExecute";
+import {
+  FilterLeaf,
+  FilterNode,
+} from "../../../services/lib/filters/filterDefs";
+import { buildFilterWithAuthClickHouseProperties } from "../../../services/lib/filters/filters";
 import { Result } from "../../result";
-import { Database } from "../../../supabase/database.types";
+import { dbQueryClickhouse } from "../db/dbExecute";
 
 export interface PropertyParam {
   property_param: string;
   property_key: string;
 }
 
+function getFilterSearchFilterNode(
+  property: string,
+  search: string
+): FilterNode {
+  const propertyFilter: FilterLeaf = {
+    properties_copy_v2: {
+      key: {
+        equals: property,
+      },
+    },
+  };
+  if (search === "") {
+    return propertyFilter;
+  }
+  const searchFilter: FilterLeaf = {
+    properties_copy_v2: {
+      value: {
+        contains: search,
+      },
+    },
+  };
+  return {
+    left: propertyFilter,
+    right: searchFilter,
+    operator: "and",
+  };
+}
+
 export async function getPropertyParams(
-  user_id: string
+  org_id: string,
+  property: string,
+  search: string
 ): Promise<Result<PropertyParam[], string>> {
+  const builtFilter = await buildFilterWithAuthClickHouseProperties({
+    org_id,
+    filter: getFilterSearchFilterNode(property, search),
+    argsAcc: [],
+  });
+
   const query = `
-SELECT DISTINCT properties->>keys AS property_param,
-keys AS property_key
+  SELECT distinct key as property_key, value as property_param
+  from properties_copy_v2
+  where (
+    ${builtFilter.filter}
+  )
+  limit 100
+`;
 
-FROM request r
-JOIN user_api_keys u ON r.auth_hash = u.api_key_hash
-CROSS JOIN LATERAL jsonb_object_keys(properties) keys
-WHERE (u.user_id = '${user_id}');`;
+  const { data, error } = await dbQueryClickhouse<PropertyParam>(
+    query,
+    builtFilter.argsAcc
+  );
 
-  const { data, error } = await dbExecute<PropertyParam>(query, []);
   if (error !== null) {
     return { data: null, error: error };
   }

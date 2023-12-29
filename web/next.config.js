@@ -11,15 +11,20 @@ const nextConfig = {
     config.resolve.extensions.push(".graphql"); // Add this line
     return config;
   },
-  webpackDevMiddleware: (config) => {
-    return config;
-  },
   async redirects() {
     return [
       {
         source: "/api/graphql/download-schema",
         destination: "/api-public-schema.graphql",
         permanent: true,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/:path*",
+        destination: "https://app.posthog.com/:path*",
       },
     ];
   },

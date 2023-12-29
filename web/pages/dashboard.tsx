@@ -1,51 +1,53 @@
-import { createServerSupabaseClient } from "@supabase/auth-helpers-nextjs";
-import { User, useUser } from "@supabase/auth-helpers-react";
-import { GetServerSidePropsContext } from "next";
+import { User } from "@supabase/auth-helpers-react";
+import { init } from "commandbar";
+import { useEffect } from "react";
+
+import AuthLayout from "../components/shared/layout/authLayout";
 import MetaData from "../components/shared/metaData";
 import DashboardPage from "../components/templates/dashboard/dashboardPage";
-import { getRequestCount } from "../lib/api/request/request";
-import { requestOverLimit } from "../lib/checkRequestLimit";
-import { getKeys } from "../services/lib/keys";
-import { Database } from "../supabase/database.types";
+import { withAuthSSR } from "../lib/api/handlerWrappers";
+import { useTheme } from "../components/shared/theme/themeContext";
 
 interface DashboardProps {
   user: User;
-  keys: Database["public"]["Tables"]["user_api_keys"]["Row"][];
 }
 
 const Dashboard = (props: DashboardProps) => {
-  const { user, keys } = props;
+  const { user } = props;
+  const theme = useTheme();
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_COMMAND_BAR_HELPHUB_0) return;
+    if (typeof window !== "undefined") {
+      init(process.env.NEXT_PUBLIC_COMMAND_BAR_HELPHUB_0 ?? "");
+      window.CommandBar.boot(user.id);
+      theme?.theme === "dark"
+        ? window.CommandBar.setTheme("dark")
+        : window.CommandBar.setTheme("light");
+    }
+
+    return () => {
+      window.CommandBar.shutdown();
+    };
+  }, [theme?.theme, user]);
 
   return (
     <MetaData title="Dashboard">
-      <DashboardPage user={user} keys={keys} />
+      <AuthLayout user={user}>
+        <DashboardPage user={user} />
+      </AuthLayout>
     </MetaData>
   );
 };
 
 export default Dashboard;
 
-export const getServerSideProps = async (
-  context: GetServerSidePropsContext
-) => {
-  const supabase = createServerSupabaseClient(context);
+export const getServerSideProps = withAuthSSR(async (options) => {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    userData: { user, orgHasOnboarded },
+  } = options;
 
-  if (!user)
-    return {
-      redirect: {
-        destination: "/",
-        permanent: false,
-      },
-    };
-
-  const [{ data: keyData }, isRequestLimitOver] = await Promise.all([
-    getKeys(supabase),
-    requestOverLimit(supabase),
-  ]);
-  if (keyData?.length === 0) {
+  if (!orgHasOnboarded) {
     return {
       redirect: {
         destination: "/welcome",
@@ -54,19 +56,9 @@ export const getServerSideProps = async (
     };
   }
 
-  if (isRequestLimitOver) {
-    return {
-      redirect: {
-        destination: "/usage",
-        permanent: false,
-      },
-    };
-  }
-
   return {
     props: {
-      user: user,
-      keys: keyData,
+      user,
     },
   };
-};
+});

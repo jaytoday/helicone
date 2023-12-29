@@ -1,10 +1,10 @@
-import { createServerSupabaseClient } from "@supabase/auth-helpers-nextjs";
-import { User, useUser } from "@supabase/auth-helpers-react";
+import { User } from "@supabase/auth-helpers-react";
 import { GetServerSidePropsContext } from "next";
+
 import AuthLayout from "../components/shared/layout/authLayout";
 import MetaData from "../components/shared/metaData";
-import DashboardPage from "../components/templates/dashboard/dashboardPage";
 import ModelPage from "../components/templates/models/modelPage";
+import { SupabaseServerWrapper } from "../lib/wrappers/supabase";
 
 interface ModelProps {
   user: User;
@@ -14,7 +14,7 @@ const Dashboard = (props: ModelProps) => {
   const { user } = props;
 
   return (
-    <MetaData title="Dashboard">
+    <MetaData title="Models">
       <AuthLayout user={user}>
         <ModelPage />
       </AuthLayout>
@@ -27,7 +27,7 @@ export default Dashboard;
 export const getServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
-  const supabase = createServerSupabaseClient(context);
+  const supabase = new SupabaseServerWrapper(context).getClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

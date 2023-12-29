@@ -1,64 +1,95 @@
-import {
-  ArrowUpIcon,
-  ExclamationCircleIcon,
-  InformationCircleIcon,
-} from "@heroicons/react/24/solid";
-import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
-import { User } from "@supabase/supabase-js";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import AuthLayout from "../../shared/layout/authLayout";
-import ThemedTable from "../../shared/themed/themedTable";
-import { useEffect, useState } from "react";
-import { Database } from "../../../supabase/database.types";
-import { modelCost } from "../../../lib/api/metrics/costCalc";
+import { useQuery } from "@tanstack/react-query";
+import { ModelMetric } from "../../../lib/api/models/models";
+import { Result } from "../../../lib/result";
 import AuthHeader from "../../shared/authHeader";
+import {
+  TimeInterval,
+  getTimeIntervalAgo,
+} from "../../../lib/timeCalculations/time";
+import { useState } from "react";
+import ThemedTableV5 from "../../shared/themed/table/themedTableV5";
+import { INITIAL_COLUMNS } from "./initialColumns";
+
+import useSearchParams from "../../shared/utils/useSearchParams";
 
 interface ModelPageProps {}
 
-type ModelMetrics = Database["public"]["Views"]["model_metrics"]["Row"];
-
 const ModelPage = (props: ModelPageProps) => {
-  const client = useSupabaseClient<Database>();
-  const [modelMetrics, setModelMetrics] = useState<ModelMetrics[]>([]);
+  const searchParams = useSearchParams();
 
-  useEffect(() => {
-    client
-      .from("model_metrics")
-      .select("*")
+  const getInterval = () => {
+    const currentTimeFilter = searchParams.get("t");
+    if (currentTimeFilter && currentTimeFilter.split("_")[0] === "custom") {
+      return "custom";
+    } else {
+      return currentTimeFilter || "24h";
+    }
+  };
 
-      .then(({ data: metrics, error }) => {
-        if (error !== null) {
-          console.error(error);
-          return;
-        }
-        setModelMetrics(metrics);
-      });
-  }, [client]);
+  const [interval, setInterval] = useState<TimeInterval>(
+    getInterval() as TimeInterval
+  );
+
+  const [timeFilter, setTimeFilter] = useState<{
+    start: Date;
+    end: Date;
+  }>({
+    start: getTimeIntervalAgo(interval),
+    end: new Date(),
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["modelMetrics", timeFilter],
+    queryFn: async (query) => {
+      return await fetch("/api/models", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filter: "all",
+          offset: 0,
+          limit: 100,
+          timeFilter,
+        }),
+      }).then((res) => res.json() as Promise<Result<ModelMetric[], string>>);
+    },
+    refetchOnWindowFocus: false,
+  });
 
   return (
     <>
       <AuthHeader title={"Models"} />
-      <ThemedTable
-        columns={[
-          { name: "Model", key: "model", hidden: false },
-          { name: "Requests", key: "request_count", hidden: false },
-          { name: "Prompt Tokens", key: "sum_prompt_tokens", hidden: false },
-          {
-            name: "Completion Tokens",
-            key: "sum_completion_tokens",
-            hidden: false,
-          },
-          { name: "Total Tokens", key: "sum_tokens", hidden: false },
+      <ThemedTableV5
+        defaultData={data?.data || []}
+        defaultColumns={INITIAL_COLUMNS}
+        tableKey={"modelMetrics"}
+        dataLoading={isLoading}
+        exportData={data?.data || []}
+        onRowSelect={(row) => {}}
+        timeFilter={{
+          currentTimeFilter: timeFilter,
+          defaultValue: "all",
+          onTimeSelectHandler: (key: TimeInterval, value: string) => {
+            if ((key as string) === "custom") {
+              const [startDate, endDate] = value.split("_");
 
-          { name: "Cost (USD)", key: "cost", hidden: false },
-        ]}
-        rows={modelMetrics
-          .filter((m) => m.model !== null)
-          .map((m) => ({
-            ...m,
-            cost: modelCost(m as any).toFixed(2),
-          }))}
+              const start = new Date(startDate);
+              const end = new Date(endDate);
+              setInterval(key);
+              setTimeFilter({
+                start,
+                end,
+              });
+            } else {
+              setInterval(key);
+              setTimeFilter({
+                start: getTimeIntervalAgo(key),
+                end: new Date(),
+              });
+            }
+          },
+        }}
       />
     </>
   );

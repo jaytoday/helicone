@@ -1,9 +1,6 @@
-import { FilterLeaf, FilterNode } from "../../services/lib/filters/filterDefs";
-import { ModelUsageOverTime } from "../api/metrics/getModelUsageOverTime";
-import { DateCountDBModel } from "../api/metrics/getRequestOverTime";
-import { RequestsOverTime, TimeIncrement } from "./fetchTimeData";
+import { TimeIncrement } from "./fetchTimeData";
 
-export type TimeInterval = "3m" | "1m" | "7d" | "24h" | "1h" | "all";
+export type TimeInterval = "3m" | "1m" | "7d" | "24h" | "1h" | "all" | "custom";
 
 export function getTimeIntervalAgo(interval: TimeInterval): Date {
   const now = new Date();
@@ -20,11 +17,12 @@ export function getTimeIntervalAgo(interval: TimeInterval): Date {
       return new Date(now.setHours(now.getHours() - 1));
     case "all":
       return new Date(0);
+    default:
+      return new Date(0);
   }
 }
 
 export interface TimeGraphConfig {
-  timeMap: (date: Date) => string;
   dbIncrement: TimeIncrement;
   start: Date;
   end: Date;
@@ -76,11 +74,12 @@ export function timeBackfill<T, K>(
     new Date(date.getTime() + getIncrement(totalTime));
   while (current < end) {
     const nextTime = increment(current);
+    const initialClone = { ...initial };
     const val = data
       .filter(
         (d) => d.created_at_trunc >= current && d.created_at_trunc < nextTime
       )
-      .reduce((acc, d) => reducer(acc, d), initial);
+      .reduce((acc, d) => reducer(acc, d), initialClone);
 
     result.push({ time: current, ...val });
     current = nextTime;

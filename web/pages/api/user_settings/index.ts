@@ -1,20 +1,14 @@
-import {
-  createServerSupabaseClient,
-  User,
-} from "@supabase/auth-helpers-nextjs";
+import { User } from "@supabase/auth-helpers-nextjs";
 import { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
 import { Result } from "../../../lib/result";
 
-import { deleteSubscription } from "../../../lib/api/subscription/delete";
 import { getSubscriptions } from "../../../lib/api/subscription/get";
 import { supabaseServer } from "../../../lib/supabaseServer";
 import { Database } from "../../../supabase/database.types";
-import { Tier } from "../../../components/templates/usage/usagePage";
-import {
-  stripeEnterpriseProductId,
-  stripeStarterProductId,
-} from "../checkout_sessions";
+// import { Tier } from "../../../components/templates/usage/usagePage";
+import { SupabaseServerWrapper } from "../../../lib/wrappers/supabase";
+// import { REQUEST_LIMITS } from "../../../lib/constants";
 type UserSettings = Database["public"]["Tables"]["user_settings"]["Row"];
 
 export type UserSettingsResponse = {
@@ -22,7 +16,7 @@ export type UserSettingsResponse = {
   subscription?: Stripe.Subscription;
 };
 
-async function getOrCreateUserSettings(
+export async function getOrCreateUserSettings(
   user: User
 ): Promise<Result<UserSettings, string>> {
   const { data: userSettings, error: userSettingsError } = await supabaseServer
@@ -30,112 +24,37 @@ async function getOrCreateUserSettings(
     .select("*")
     .eq("user", user.id)
     .single();
-  if (userSettingsError !== null || userSettings === null) {
-    const { error: createUserSettingsError, data: createUserSettingsData } =
+
+  if (userSettings === null) {
+    // add the user into the userSettings page
+    const { data: newUserSettings, error: newUserSettingsError } =
       await supabaseServer
         .from("user_settings")
         .insert({
           user: user.id,
+          tier: "free",
+          request_limit: 100_000,
         })
         .select("*")
         .single();
-    if (createUserSettingsError !== null) {
-      return { data: null, error: createUserSettingsError.message };
-    } else {
+
+    if (newUserSettingsError) {
       return {
-        data: createUserSettingsData,
-        error: null,
+        data: null,
+        error: newUserSettingsError.message,
       };
     }
-  } else {
-    return { data: userSettings, error: null };
+
+    return {
+      data: newUserSettings,
+      error: null,
+    };
   }
-}
 
-function getHighestSubscription(
-  subscriptions: Subscription[]
-): [Subscription | null, Tier] {
-  const activeSubscriptions = subscriptions.filter(
-    (subscription) => subscription.status === "active"
-  );
-  const enterprise = activeSubscriptions.find(
-    (subscription) => subscription.plan?.product === stripeEnterpriseProductId
-  );
-  const starter = activeSubscriptions.find(
-    (subscription) => subscription.plan?.product === stripeStarterProductId
-  );
-
-  if (enterprise) {
-    return [enterprise, "enterprise"];
-  } else if (starter) {
-    const isPendingCancellation = starter?.cancel_at_period_end === true;
-    if (isPendingCancellation) {
-      return [starter, "starter-pending-cancel"];
-    } else {
-      return [starter, "starter"];
-    }
-  } else {
-    return [null, "free"];
-  }
-}
-
-function getRequestLimit(tier: Tier): number {
-  if (tier === "free") {
-    return 1000;
-  } else if (tier === "starter") {
-    return 50_000;
-  } else if (tier === "starter-pending-cancel") {
-    return 50_000;
-  } else if (tier === "enterprise") {
-    return 1_000_000;
-  } else {
-    throw new Error("Unknown tier");
-  }
-}
-
-type Subscription = Stripe.Subscription & {
-  plan?: Stripe.Plan;
-};
-
-async function syncSettingsWithStripe(
-  userSettings: UserSettings,
-  subscriptions: Subscription[]
-): Promise<Result<undefined, string>> {
-  const [activeSubscription, currentTier] =
-    getHighestSubscription(subscriptions);
-  if (currentTier === userSettings.tier) {
-    return { data: undefined, error: null };
-  } else if (activeSubscription === null || currentTier === "free") {
-    const { error: updateUserSettingsError } = await supabaseServer
-      .from("user_settings")
-      .update({
-        tier: "free",
-        request_limit: 1000,
-      })
-      .eq("user", userSettings.user)
-      .select("*")
-      .single();
-    if (updateUserSettingsError !== null) {
-      return { data: null, error: updateUserSettingsError.message };
-    } else {
-      return { data: undefined, error: null };
-    }
-  } else {
-    const { error: updateUserSettingsError } = await supabaseServer
-      .from("user_settings")
-      .update({
-        tier: currentTier,
-        request_limit: getRequestLimit(currentTier),
-      })
-      .eq("user", userSettings.user)
-      .select("*")
-      .single();
-    if (updateUserSettingsError !== null) {
-      return { data: null, error: updateUserSettingsError.message };
-    } else {
-      return { data: undefined, error: null };
-    }
-  }
+  return {
+    data: userSettings,
+    error: null,
+  };
 }
 
 export default async function handler(
@@ -143,12 +62,13 @@ export default async function handler(
   res: NextApiResponse<UserSettingsResponse | string>
 ) {
   if (req.method === "GET") {
-    const client = createServerSupabaseClient({ req, res });
+    const client = new SupabaseServerWrapper({ req, res }).getClient();
 
     const {
       data: { user },
       error: userError,
     } = await client.auth.getUser();
+
     if (userError !== null) {
       console.error(userError);
       res.status(500).json(userError.message);
@@ -173,15 +93,6 @@ export default async function handler(
     }
     const { data: subscriptions, error: subscriptionError } =
       await getSubscriptions(req, res);
-
-    const syncSettingsWithStripeResult = await syncSettingsWithStripe(
-      userSettings,
-      subscriptions ?? []
-    );
-    if (syncSettingsWithStripeResult.error !== null) {
-      res.status(500).json(syncSettingsWithStripeResult.error);
-      return;
-    }
 
     if (subscriptionError !== null) {
       res.status(500).json(subscriptionError);

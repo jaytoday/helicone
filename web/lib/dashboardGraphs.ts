@@ -4,10 +4,9 @@ import { CostOverTime } from "../pages/api/metrics/costOverTime";
 import { ErrorOverTime } from "../pages/api/metrics/errorOverTime";
 import {
   FilterLeaf,
-  filterListToTree,
   FilterNode,
+  filterListToTree,
 } from "../services/lib/filters/filterDefs";
-import { ErrorCountOverTime } from "./api/metrics/getErrorOverTime";
 import { Metrics } from "./api/metrics/metrics";
 import { OverTimeRequestQueryParams } from "./api/metrics/timeDataHandlerWrapper";
 import { Result } from "./result";
@@ -15,20 +14,18 @@ import {
   RequestsOverTime,
   TimeIncrement,
 } from "./timeCalculations/fetchTimeData";
-
 import { getTimeInterval } from "./timeCalculations/time";
 
 export const initialGraphDataState: GraphDataState = {
   requestsOverTime: "loading",
   costOverTime: "loading",
-  errorOverTime: "loading",
 };
 
 export interface GraphDataState {
   requestsOverTime: Loading<Result<RequestsOverTime[], string>>;
   costOverTime: Loading<Result<CostOverTime[], string>>;
-  errorOverTime: Loading<Result<ErrorOverTime[], string>>;
 }
+
 async function fetchDataOverTime<T>(
   timeFilter: {
     start: Date;
@@ -149,17 +146,17 @@ export async function getDashboardData(
   const filter: FilterNode = {
     right: {
       left: {
-        request: {
-          created_at: {
-            gte: timeFilter.start.toISOString(),
+        response_copy_v3: {
+          request_created_at: {
+            gte: timeFilter.start,
           },
         },
       },
       operator: "and",
       right: {
-        request: {
-          created_at: {
-            lte: timeFilter.end.toISOString(),
+        response_copy_v3: {
+          request_created_at: {
+            lte: timeFilter.end,
           },
         },
       },

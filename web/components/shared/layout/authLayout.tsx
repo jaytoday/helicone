@@ -1,35 +1,48 @@
 /* eslint-disable @next/next/no-img-element */
 import Image from "next/image";
 
-import { Fragment, useEffect, useState } from "react";
 import { Dialog, Disclosure, Menu, Transition } from "@headlessui/react";
 import {
   ArrowTopRightOnSquareIcon,
   Bars3BottomLeftIcon,
+  BellIcon,
   BeakerIcon,
-  CogIcon,
+  BookOpenIcon,
+  BriefcaseIcon,
+  ChartBarIcon,
+  ChevronRightIcon,
+  CircleStackIcon,
+  CloudArrowUpIcon,
+  Cog6ToothIcon,
   CubeTransparentIcon,
+  GlobeAltIcon,
   HomeIcon,
-  InboxArrowDownIcon,
   KeyIcon,
-  UserCircleIcon,
-  UsersIcon,
-  WrenchScrewdriverIcon,
-  XMarkIcon,
+  LockClosedIcon,
+  QuestionMarkCircleIcon,
   TableCellsIcon,
+  TagIcon,
+  UserCircleIcon,
+  UserGroupIcon,
+  UsersIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
-import {
-  ExclamationCircleIcon,
-  MagnifyingGlassIcon,
-} from "@heroicons/react/20/solid";
-import { clsx } from "../clsx";
+import { User, useSupabaseClient } from "@supabase/auth-helpers-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { User, useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
+import { Fragment, useState } from "react";
 import { DEMO_EMAIL } from "../../../lib/constants";
-import { useGetKeys } from "../../../services/hooks/keys";
-import ThemedModal from "../themed/themedModal";
+import { Database } from "../../../supabase/database.types";
+import { clsx } from "../clsx";
+import ThemedDropdown from "../themed/themedDropdown";
+import OrgContext, { useOrg } from "./organizationContext";
 
+import { GrGraphQl } from "react-icons/gr";
+import { useFeatureFlags } from "../../../services/hooks/featureFlags";
+import UpgradeProModal from "../upgradeProModal";
+import OrgDropdown from "./orgDropdown";
+
+import { useLocalStorage } from "../../../services/hooks/localStorage";
 interface AuthLayoutProps {
   children: React.ReactNode;
   user: User;
@@ -39,54 +52,136 @@ interface AuthLayoutProps {
 const AuthLayout = (props: AuthLayoutProps) => {
   const { children, user, hideSidebar } = props;
   const router = useRouter();
-  const supabaseClient = useSupabaseClient();
+  const supabaseClient = useSupabaseClient<Database>();
   const { pathname } = router;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const org = useOrg();
+
+  const tier = org?.currentOrg.tier;
+
+  const [open, setOpen] = useState(false);
+  const { hasFlag } = useFeatureFlags("webhook_beta", org?.currentOrg.id || "");
+  const [openDev, setOpenDev] = useLocalStorage("openDev", "true");
+  const [openOrg, setOpenOrg] = useLocalStorage("openOrg", "false");
 
   const navigation = [
     {
       name: "Dashboard",
       href: "/dashboard",
       icon: HomeIcon,
-      current: pathname === "/dashboard",
+      current: pathname.includes("/dashboard"),
     },
     {
       name: "Requests",
       href: "/requests",
       icon: TableCellsIcon,
-      current: pathname === "/requests",
+      current: pathname.includes("/requests"),
     },
     {
       name: "Users",
       href: "/users",
       icon: UsersIcon,
-      current: pathname === "/users",
+      current: pathname.includes("/users"),
+    },
+    {
+      name: (
+        <div className="flex w-full space-x-2 items-center">
+          <p>Alerts</p>
+          <div className="bg-purple-100 text-purple-700 ring-purple-300 dark:bg-purple-900 dark:text-purple-300 dark:ring-purple-700 w-max items-center rounded-xl px-2 py-0.5 -my-0.5 text-xs font-medium ring-1 ring-inset">
+            new
+          </div>
+        </div>
+      ),
+      href: "/alerts",
+      icon: BellIcon,
+      current: pathname.includes("/alerts"),
+    },
+    {
+      name: "Properties",
+      href: "/properties",
+      icon: TagIcon,
+      current: pathname.includes("/properties"),
+    },
+    {
+      name: "Cache",
+      href: "/cache",
+      icon: CircleStackIcon,
+      current: pathname.includes("/cache"),
+    },
+    {
+      name: "Jobs",
+      href: "/jobs",
+      icon: BriefcaseIcon,
+      current: pathname.includes("/jobs"),
     },
     {
       name: "Models",
       href: "/models",
       icon: CubeTransparentIcon,
-      current: pathname === "/models",
+      current: pathname.includes("/models"),
+    },
+    {
+      name: "Playground",
+      href: "/playground",
+      icon: BeakerIcon,
+      current: pathname.includes("/playground"),
     },
   ];
 
-  const accountNav = [
+  const organizationNav = [
     {
-      name: "Usage",
-      href: "/usage",
-      icon: BeakerIcon,
-      current: pathname === "/usage",
+      name: "Settings",
+      href: "/organization/settings",
+      icon: Cog6ToothIcon,
+      current: pathname.includes("/settings"),
     },
+    {
+      name: "Plan",
+      href: "/organization/plan",
+      icon: ChartBarIcon,
+      current: pathname.includes("/plan"),
+    },
+    {
+      name: "Members",
+      href: "/organization/members",
+      icon: UserGroupIcon,
+      current: pathname.includes("/members"),
+    },
+  ];
+
+  const developerNav = [
     {
       name: "Keys",
       href: "/keys",
       icon: KeyIcon,
-      current: pathname === "/keys",
+      current: pathname.includes("/keys"),
+    },
+    {
+      name: "GraphQL",
+      href: "/graphql",
+      icon: GrGraphQl,
+      current: pathname.includes("/graphql"),
     },
   ];
 
-  const { count, isLoading, keys, refetch } = useGetKeys();
+  if (hasFlag) {
+    developerNav.push({
+      name: "Webhooks",
+      href: "/webhooks",
+      icon: GlobeAltIcon,
+      current: pathname.includes("/webhooks"),
+    });
+  }
+
+  if (tier === "pro" || tier === "enterprise") {
+    developerNav.push({
+      name: "Vault",
+      href: "/vault",
+      icon: LockClosedIcon,
+      current: pathname.includes("/vault"),
+    });
+  }
 
   return (
     <>
@@ -147,52 +242,19 @@ const AuthLayout = (props: AuthLayoutProps) => {
                       </Transition.Child>
                       <div className="flex flex-shrink-0 items-center px-4">
                         <Image
-                          className="rounded-md"
-                          src="/assets/heli-full-logo.png"
+                          className="block rounded-md"
+                          src="/assets/landing/helicone.webp"
                           width={150}
-                          height={75}
+                          height={150 / (1876 / 528)}
                           alt="Helicone-full-logo"
                         />
                       </div>
                       <div className="mt-5 h-0 flex-1 overflow-y-auto">
                         <nav className="space-y-1 px-2">
-                          {navigation.map((item) => {
-                            if (
-                              item.name === "Keys" &&
-                              !isLoading &&
-                              count < 1
-                            ) {
-                              return (
-                                <Link
-                                  key={item.name}
-                                  href={item.href}
-                                  className={clsx(
-                                    item.current
-                                      ? "bg-gray-200 text-black"
-                                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                                    "group flex items-center px-2 py-2 text-md font-medium rounded-md w-full justify-between"
-                                  )}
-                                >
-                                  <div className="flex flex-row items-center">
-                                    <item.icon
-                                      className={clsx(
-                                        item.current
-                                          ? "text-black"
-                                          : "text-gray-600 group-hover:text-gray-900",
-                                        "mr-3 flex-shrink-0 h-5 w-5"
-                                      )}
-                                    />
-                                    {item.name}
-                                  </div>
-                                  <div>
-                                    <ExclamationCircleIcon className="h-6 w-6 mr-1 text-red-500" />
-                                  </div>
-                                </Link>
-                              );
-                            }
+                          {navigation.map((item, idx) => {
                             return (
                               <Link
-                                key={item.name}
+                                key={idx}
                                 href={item.href}
                                 className={clsx(
                                   item.current
@@ -216,24 +278,18 @@ const AuthLayout = (props: AuthLayoutProps) => {
                           <p className="ml-1 mb-1 text-xs font-sans font-medium tracking-wider pt-8 text-gray-700">
                             Account
                           </p>
-                          {accountNav.map((item) => {
-                            if (
-                              item.name === "Keys" &&
-                              !isLoading &&
-                              count < 1
-                            ) {
-                              return (
-                                <Link
-                                  key={item.name}
-                                  href={item.href}
-                                  className={clsx(
-                                    item.current
-                                      ? "bg-gray-200 text-black"
-                                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                                    "group flex items-center px-2 py-2 text-md font-medium rounded-md w-full justify-between"
-                                  )}
-                                >
-                                  <div className="flex flex-row items-center">
+                          {organizationNav.map((item, i) => {
+                            return (
+                              <Link
+                                key={item.name}
+                                href={item.href}
+                                className={clsx(
+                                  "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                                  "group flex items-center px-2 py-2 text-md font-medium rounded-md w-full"
+                                )}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center">
                                     <item.icon
                                       className={clsx(
                                         item.current
@@ -241,117 +297,55 @@ const AuthLayout = (props: AuthLayoutProps) => {
                                           : "text-gray-600 group-hover:text-gray-900",
                                         "mr-3 flex-shrink-0 h-5 w-5"
                                       )}
+                                      aria-hidden="true"
                                     />
                                     {item.name}
                                   </div>
-                                  <div>
-                                    <ExclamationCircleIcon className="h-5 w-5 mr-1 text-red-500" />
-                                  </div>
-                                </Link>
-                              );
-                            }
-                            return (
-                              <Link
-                                key={item.name}
-                                href={item.href}
-                                className={clsx(
-                                  item.current
-                                    ? "bg-gray-200 text-black"
-                                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                                  "group flex items-center px-2 py-2 text-md font-medium rounded-md"
-                                )}
-                              >
-                                <item.icon
-                                  className={clsx(
-                                    item.current
-                                      ? "text-black"
-                                      : "text-gray-600 group-hover:text-gray-900",
-                                    "mr-3 flex-shrink-0 h-5 w-5"
-                                  )}
-                                  aria-hidden="true"
-                                />
-                                {item.name}
+                                </div>
                               </Link>
                             );
                           })}
                         </nav>
                       </div>
-                      <ul className="p-4 font-medium text-md text-gray-500 space-y-4">
-                        <li>
-                          <Link
-                            href="https://docs.helicone.ai/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-gray-900"
-                          >
-                            Docs
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="https://discord.gg/zsSTcH2qhG"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-gray-900"
-                          >
-                            Discord
-                          </Link>
-                        </li>
-                      </ul>
-                      <div className="flex flex-shrink-0 border-t border-gray-200 p-4">
-                        <div className="group block w-full flex-shrink-0">
-                          <Disclosure>
-                            <div className="flex items-center">
-                              <div>
-                                <div className="px-2.5 py-0.5 text-lg font-light bg-black text-white rounded-full flex items-center justify-center focus:ring-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2">
-                                  <span className="sr-only">
-                                    Open user menu
-                                  </span>
-                                  {user?.email?.charAt(0).toUpperCase() || (
-                                    <UserCircleIcon className="h-8 w-8 text-black" />
-                                  )}
-                                </div>
-                              </div>
-                              <div className="ml-3 flex flex-col items-start">
-                                <p className="text-sm font-medium text-gray-700">
-                                  {user?.email}
-                                </p>
-                                <Disclosure.Button className="text-xs font-medium text-gray-500 group-hover:text-gray-700">
-                                  Sign Out
-                                </Disclosure.Button>
-                              </div>
-                            </div>
-                            <Disclosure.Panel className="text-gray-500">
-                              {({ close }) => (
-                                <div className="w-full flex justify-between gap-4 mt-4">
-                                  <button
-                                    onClick={() => {
-                                      close();
-                                    }}
-                                    className={clsx(
-                                      "relative inline-flex w-full justify-center border border-gray-300 items-center rounded-md hover:bg-gray-50 bg-white px-4 py-2 text-sm font-medium text-gray-700"
-                                    )}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      supabaseClient.auth.signOut().then(() => {
-                                        router.push("/");
-                                      })
-                                    }
-                                    className={clsx(
-                                      "relative inline-flex w-full justify-center text-center items-center rounded-md hover:bg-red-700 bg-red-500 px-4 py-2 text-sm font-medium text-white"
-                                    )}
-                                  >
-                                    Sign Out
-                                  </button>
-                                </div>
-                              )}
-                            </Disclosure.Panel>
-                          </Disclosure>
-                        </div>
+                      <div>
+                        <Link
+                          className="px-4 py-2 text-xs text-gray-500 flex flex-row space-x-2 hover:text-gray-900 hover:underline hover:cursor-pointer"
+                          href={"https://docs.helicone.ai/introduction"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <BookOpenIcon className="h-4 w-4" />
+                          <p>View Documentation</p>
+                        </Link>
+                        <Link
+                          className="px-4 py-2 text-xs text-gray-500 dark:hover:text-gray-100 flex flex-row space-x-2 hover:text-gray-900 hover:underline hover:cursor-pointer"
+                          href={"https://discord.gg/zsSTcH2qhG"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <QuestionMarkCircleIcon className="h-4 w-4" />
+                          <p>Help And Support</p>
+                        </Link>
                       </div>
+                      {tier === "free" ? (
+                        <div className="p-4 flex w-full justify-center">
+                          <button
+                            onClick={() => setOpen(true)}
+                            className="bg-gray-100 border border-gray-300 text-black text-sm font-medium w-full rounded-md py-2 px-2.5 flex flex-row justify-between items-center"
+                          >
+                            <div className="flex flex-row items-center">
+                              <CloudArrowUpIcon className="h-5 w-5 mr-1.5" />
+                              <p>Free Plan</p>
+                            </div>
+
+                            <p className="text-xs font-normal text-sky-600">
+                              Learn More
+                            </p>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-4" />
+                      )}
                     </Dialog.Panel>
                   </Transition.Child>
                   <div className="w-14 flex-shrink-0" aria-hidden="true">
@@ -362,229 +356,196 @@ const AuthLayout = (props: AuthLayoutProps) => {
             </Transition.Root>
 
             {/* Static sidebar for desktop */}
-            <div className="hidden md:fixed md:inset-y-0 md:flex md:w-60 md:flex-col">
+            <div className="hidden md:fixed md:inset-y-0 md:flex md:w-56 md:flex-col z-10">
               {/* Sidebar component, swap this element with another sidebar if you like */}
-              <div className="flex flex-grow flex-col overflow-y-auto border-r border-gray-200 bg-white pt-4">
-                <div className="flex flex-shrink-0 items-center px-4">
-                  <button
-                    onClick={() => {
-                      supabaseClient.auth.getUser().then((user) => {
-                        if (user.data.user?.email === DEMO_EMAIL) {
-                          supabaseClient.auth.signOut().then(() => {
-                            router.push("/");
-                          });
-                        } else {
-                          router.push("/dashboard");
-                        }
-                      });
-                    }}
-                  >
-                    <Image
-                      className="rounded-md"
-                      src="/assets/heli-full-logo.png"
-                      width={150}
-                      height={75}
-                      alt="Helicone-full-logo"
-                    />
-                  </button>
-                </div>
-                <div className="mt-5 flex flex-grow flex-col">
-                  <nav className="flex-1 space-y-1 px-2 pb-4 pt-2">
-                    {navigation.map((item) => {
-                      if (item.name === "Keys" && !isLoading && count < 1) {
-                        return (
-                          <Link
-                            key={item.name}
-                            href={item.href}
-                            className={clsx(
-                              item.current
-                                ? "bg-gray-200 text-black"
-                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                              "group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full justify-between"
-                            )}
-                          >
-                            <div className="flex flex-row items-center">
-                              <item.icon
-                                className={clsx(
-                                  item.current
-                                    ? "text-black"
-                                    : "text-gray-600 group-hover:text-gray-900",
-                                  "mr-3 flex-shrink-0 h-5 w-5"
-                                )}
-                              />
-                              {item.name}
-                            </div>
-                            <div>
-                              <ExclamationCircleIcon className="h-5 w-5 mr-1 text-red-500" />
-                            </div>
-                          </Link>
-                        );
-                      }
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={clsx(
-                            item.current
-                              ? "bg-gray-200 text-black"
-                              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                            "group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                          )}
-                        >
-                          <item.icon
-                            className={clsx(
-                              item.current
-                                ? "text-black"
-                                : "text-gray-600 group-hover:text-gray-900",
-                              "mr-3 flex-shrink-0 h-5 w-5"
-                            )}
-                            aria-hidden="true"
-                          />
-                          {item.name}
-                        </Link>
-                      );
-                    })}
-                    <p className="ml-1 mb-1 text-xs font-sans font-medium tracking-wider pt-8 text-gray-700">
-                      Account
-                    </p>
-                    {accountNav.map((item) => {
-                      if (item.name === "Keys" && !isLoading && count < 1) {
-                        return (
-                          <Link
-                            key={item.name}
-                            href={item.href}
-                            className={clsx(
-                              item.current
-                                ? "bg-gray-200 text-black"
-                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                              "group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full justify-between"
-                            )}
-                          >
-                            <div className="flex flex-row items-center">
-                              <item.icon
-                                className={clsx(
-                                  item.current
-                                    ? "text-black"
-                                    : "text-gray-600 group-hover:text-gray-900",
-                                  "mr-3 flex-shrink-0 h-5 w-5"
-                                )}
-                              />
-                              {item.name}
-                            </div>
-                            <div>
-                              <ExclamationCircleIcon className="h-5 w-5 mr-1 text-red-500" />
-                            </div>
-                          </Link>
-                        );
-                      }
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={clsx(
-                            item.current
-                              ? "bg-gray-200 text-black"
-                              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                            "group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                          )}
-                        >
-                          <item.icon
-                            className={clsx(
-                              item.current
-                                ? "text-black"
-                                : "text-gray-600 group-hover:text-gray-900",
-                              "mr-3 flex-shrink-0 h-5 w-5"
-                            )}
-                            aria-hidden="true"
-                          />
-                          {item.name}
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                </div>
-                <ul className="p-4 font-medium text-sm text-gray-500 space-y-4">
-                  <li>
-                    <Link
-                      href="https://docs.helicone.ai/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-gray-900"
-                    >
-                      Docs
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="https://discord.gg/zsSTcH2qhG"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-gray-900"
-                    >
-                      Discord
-                    </Link>
-                  </li>
-                </ul>
-                <div className="flex flex-shrink-0 border-t border-gray-200 p-4">
-                  <div className="group block w-full flex-shrink-0">
-                    <Disclosure>
-                      <div className="flex items-center">
-                        <div>
-                          <div className="px-2.5 py-0.5 text-lg font-light bg-black text-white rounded-full flex items-center justify-center focus:ring-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2">
-                            <span className="sr-only">Open user menu</span>
-                            {user?.email?.charAt(0).toUpperCase() || (
-                              <UserCircleIcon className="h-8 w-8 text-black" />
-                            )}
-                          </div>
-                        </div>
-                        <div className="ml-3 flex flex-col items-start">
-                          <p className="text-sm font-medium text-gray-700">
-                            {user?.email}
-                          </p>
-                          <Disclosure.Button className="text-xs font-medium text-gray-500 group-hover:text-gray-700">
-                            Sign Out
-                          </Disclosure.Button>
-                        </div>
-                      </div>
-                      <Disclosure.Panel className="text-gray-500">
-                        {({ close }) => (
-                          <div className="w-full flex justify-between gap-4 mt-4">
-                            <button
-                              onClick={() => {
-                                close();
-                              }}
-                              className={clsx(
-                                "relative inline-flex w-full justify-center border border-gray-300 items-center rounded-md hover:bg-gray-50 bg-white px-4 py-2 text-sm font-medium text-gray-700"
-                              )}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() =>
-                                supabaseClient.auth.signOut().then(() => {
-                                  router.push("/");
-                                })
-                              }
-                              className={clsx(
-                                "relative inline-flex w-full justify-center text-center items-center rounded-md hover:bg-red-700 bg-red-500 px-4 py-2 text-sm font-medium text-white"
-                              )}
-                            >
-                              Sign Out
-                            </button>
-                          </div>
-                        )}
-                      </Disclosure.Panel>
-                    </Disclosure>
+              <div className="w-full flex flex-grow flex-col overflow-y-auto border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+                <div className="w-full bg-white dark:bg-black absolute flex flex-row justify-between items-center px-2 border-b border-r border-gray-200 dark:border-gray-800 h-16 min-h-[4rem]">
+                  <div className="flex flex-col w-full">
+                    <OrgDropdown />
                   </div>
                 </div>
+                <div className="mt-16 flex flex-grow flex-col">
+                  <nav className="flex-1 space-y-6 px-2 pb-4 pt-2">
+                    <div className="flex flex-col space-y-1">
+                      {navigation.map((item, idx) => {
+                        return (
+                          <Link
+                            key={idx}
+                            href={item.href}
+                            className={clsx(
+                              item.current
+                                ? "bg-gray-200 text-black dark:bg-gray-700 dark:text-white"
+                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-100",
+                              "group flex items-center px-2 py-1.5 text-sm font-medium rounded-md"
+                            )}
+                          >
+                            <item.icon
+                              className={clsx(
+                                item.current
+                                  ? "text-black dark:text-white"
+                                  : "text-gray-600 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-100",
+                                "mr-3 flex-shrink-0 h-4 w-4"
+                              )}
+                              aria-hidden="true"
+                            />
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 text-xs font-sans font-medium tracking-wider text-gray-500 flex items-center space-x-2 rounded-md px-2 py-1">
+                        <p>Developer</p>
+                      </div>
+                      <div className="flex flex-col space-y-1">
+                        {developerNav.map((item, i) => {
+                          return (
+                            <Link
+                              key={item.name}
+                              href={item.href}
+                              className={clsx(
+                                item.current
+                                  ? "bg-gray-200 text-black dark:bg-gray-700 dark:text-white"
+                                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-100",
+                                "group flex items-center px-2 py-1.5 text-sm font-medium rounded-md"
+                              )}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center">
+                                  <item.icon
+                                    className={clsx(
+                                      item.current
+                                        ? "text-black dark:text-white"
+                                        : "text-gray-600 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-100",
+                                      "mr-3 flex-shrink-0 h-4 w-4"
+                                    )}
+                                    aria-hidden="true"
+                                  />
+                                  {item.name}
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <Disclosure
+                      defaultOpen={
+                        router.pathname.includes("/organization/settings") ||
+                        router.pathname.includes("/organization/plan") ||
+                        router.pathname.includes("/organization/members")
+                      }
+                    >
+                      {({ open }) => (
+                        <div>
+                          <Disclosure.Button
+                            onClick={() => {
+                              setOpenOrg(openOrg === "true" ? "false" : "true");
+                            }}
+                            className="w-full mb-1 text-xs font-sans font-medium tracking-wider text-gray-500 flex items-center space-x-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800 px-2 py-1"
+                          >
+                            <p>Organization</p>
+                            <ChevronRightIcon
+                              className={clsx(
+                                open ? "transform rotate-90" : "",
+                                "h-3 w-3 inline"
+                              )}
+                            />
+                          </Disclosure.Button>
+                          <Transition
+                            enter="transition duration-100 ease-out"
+                            enterFrom="transform scale-95 opacity-0"
+                            enterTo="transform scale-100 opacity-100"
+                            leave="transition duration-75 ease-out"
+                            leaveFrom="transform scale-100 opacity-100"
+                            leaveTo="transform scale-95 opacity-0"
+                          >
+                            <Disclosure.Panel className="flex flex-col space-y-1">
+                              {organizationNav.map((item, i) => {
+                                return (
+                                  <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    className={clsx(
+                                      item.current
+                                        ? "bg-gray-200 text-black dark:bg-gray-700 dark:text-white"
+                                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-100",
+                                      "group flex items-center px-2 py-1.5 text-sm font-medium rounded-md"
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-between w-full">
+                                      <div className="flex items-center">
+                                        <item.icon
+                                          className={clsx(
+                                            item.current
+                                              ? "text-black dark:text-white"
+                                              : "text-gray-600 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-100",
+                                            "mr-3 flex-shrink-0 h-4 w-4"
+                                          )}
+                                          aria-hidden="true"
+                                        />
+                                        {item.name}
+                                      </div>
+                                    </div>
+                                  </Link>
+                                );
+                              })}
+                            </Disclosure.Panel>
+                          </Transition>
+                        </div>
+                      )}
+                    </Disclosure>
+                  </nav>
+                </div>
+                <div>
+                  <Link
+                    className="px-4 py-2 text-xs text-gray-500 dark:hover:text-gray-100 flex flex-row space-x-2 hover:text-gray-900 hover:underline hover:cursor-pointer"
+                    href={"https://docs.helicone.ai/introduction"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <BookOpenIcon className="h-4 w-4" />
+                    <p>View Documentation</p>
+                  </Link>
+                  <Link
+                    className="px-4 py-2 text-xs text-gray-500 dark:hover:text-gray-100 flex flex-row space-x-2 hover:text-gray-900 hover:underline hover:cursor-pointer"
+                    href={"https://discord.gg/zsSTcH2qhG"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <QuestionMarkCircleIcon className="h-4 w-4" />
+                    <p>Help And Support</p>
+                  </Link>
+                </div>
+                {tier === "free" ? (
+                  <div className="p-4 flex w-full justify-center">
+                    <button
+                      onClick={() => setOpen(true)}
+                      className="bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 dark:text-white text-black text-sm font-medium w-full rounded-md py-2 px-2.5 flex flex-row justify-between items-center"
+                    >
+                      <div className="flex flex-row items-center">
+                        <CloudArrowUpIcon className="h-5 w-5 mr-1.5" />
+                        <p>Free Plan</p>
+                      </div>
+
+                      <p className="text-xs font-normal text-sky-600">
+                        Learn More
+                      </p>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-4" />
+                )}
               </div>
             </div>
           </>
         )}
         <div
-          className={clsx("flex flex-1 flex-col", !hideSidebar && "md:pl-60")}
+          className={clsx("flex flex-1 flex-col", !hideSidebar && "md:pl-56")}
         >
-          <div className="sticky md:hidden top-0 z-20 flex h-14 flex-shrink-0 bg-white border-b border-gray-300">
+          <div className="sticky top-0 z-20 h-16 flex md:hidden flex-shrink-0 bg-white dark:bg-black border-b border-gray-300 dark:border-gray-700">
             <button
               type="button"
               className="border-r border-gray-200 px-4 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 md:hidden"
@@ -593,10 +554,104 @@ const AuthLayout = (props: AuthLayoutProps) => {
               <span className="sr-only">Open sidebar</span>
               <Bars3BottomLeftIcon className="h-6 w-6" aria-hidden="true" />
             </button>
+            <div className="flex flex-1 justify-end px-4">
+              <div className="ml-4 flex items-center md:ml-6">
+                <div className="flex md:hidden">
+                  {org && (
+                    <ThemedDropdown
+                      selectedValue={org.currentOrg.id}
+                      options={org.allOrgs.map((org) => {
+                        if (org.owner === user?.id) {
+                          return {
+                            label: org.name + " (Owner)",
+                            value: org.id,
+                          };
+                        } else {
+                          return {
+                            label: org.name,
+                            value: org.id,
+                          };
+                        }
+                      })}
+                      onSelect={(value) => {
+                        if (value) {
+                          org.setCurrentOrg(value);
+                        }
+                      }}
+                      align="right"
+                    />
+                  )}
+                </div>
+
+                {/* Profile dropdown */}
+                <Menu as="div" className="relative ml-6">
+                  <div className="flex flex-row gap-4 items-center">
+                    <Menu.Button className="px-2.5 py-0.5 text-lg font-light bg-black text-white rounded-full flex items-center justify-center focus:ring-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2">
+                      <span className="sr-only">Open user menu</span>
+                      {user?.email?.charAt(0).toUpperCase() || (
+                        <UserCircleIcon className="h-8 w-8 text-black" />
+                      )}
+                    </Menu.Button>
+                  </div>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                  >
+                    <Menu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <Menu.Item key="user-email">
+                        {({ active }) => (
+                          <p className="truncate block px-4 py-2 text-sm text-black font-bold border-b border-gray-300">
+                            {user?.email}
+                          </p>
+                        )}
+                      </Menu.Item>
+                      {organizationNav.map((item) => (
+                        <Menu.Item key={item.name}>
+                          {({ active }) => (
+                            <a
+                              href={item.href}
+                              className={clsx(
+                                active ? "bg-gray-100" : "",
+                                "block px-4 py-2 text-sm text-gray-600"
+                              )}
+                            >
+                              {item.name}
+                            </a>
+                          )}
+                        </Menu.Item>
+                      ))}
+
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            className={clsx(
+                              active ? "bg-gray-100" : "",
+                              "flex w-full px-4 py-2 text-sm text-gray-500 border-t border-gray-300"
+                            )}
+                            onClick={async () => {
+                              supabaseClient.auth.signOut().then(() => {
+                                router.push("/");
+                              });
+                            }}
+                          >
+                            Sign out
+                          </button>
+                        )}
+                      </Menu.Item>
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+              </div>
+            </div>
           </div>
 
-          <main className="flex-1 bg">
-            <div className="mx-auto px-4 sm:px-8 bg-gray-100 h-full">
+          <main className="flex-1">
+            <div className="mx-auto px-4 sm:px-8 bg-gray-100 dark:bg-[#17191d] h-full">
               {/* Replace with your content */}
               {user?.email === DEMO_EMAIL && (
                 <div className="pointer-events-none flex sm:justify-center mt-4">
@@ -624,11 +679,11 @@ const AuthLayout = (props: AuthLayoutProps) => {
                       </Link>
                     </div>
                     <button
-                      onClick={() =>
+                      onClick={async () => {
                         supabaseClient.auth.signOut().then(() => {
                           router.push("/");
-                        })
-                      }
+                        });
+                      }}
                       type="button"
                       className="-m-1.5 flex-none px-3 py-1.5 text-sm bg-white hover:bg-gray-100 text-gray-900 rounded-lg"
                     >
@@ -637,12 +692,20 @@ const AuthLayout = (props: AuthLayoutProps) => {
                   </div>
                 </div>
               )}
-              <div className="py-4 sm:py-8">{children}</div>
+              <OrgContext.Provider value={org}>
+                <div
+                  className="py-4 sm:py-8 mx-auto w-full max-w-[100rem]"
+                  key={org?.renderKey}
+                >
+                  {children}
+                </div>
+              </OrgContext.Provider>
               {/* /End replace */}
             </div>
           </main>
         </div>
       </div>
+      <UpgradeProModal open={open} setOpen={setOpen} />
     </>
   );
 };

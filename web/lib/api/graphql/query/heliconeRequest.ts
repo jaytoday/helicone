@@ -4,33 +4,47 @@ import {
   FilterLeaf,
   filterListToTree,
   FilterNode,
-  SingleKey,
-  TablesAndViews,
-  TextOperators,
 } from "../../../../services/lib/filters/filterDefs";
 import { getRequests } from "../../request/request";
-import { getUserOrThrow } from "../helpers/auth";
 import {
   HeliconeRequest,
   QueryHeliconeRequestArgs,
   HeliconeRequestFilter,
-  TextOperators as GQLTextOperators,
-  PropertyFilter,
 } from "../schema/types/graphql";
-
-function convertTextOperators(op: GQLTextOperators): SingleKey<TextOperators> {
-  if (op.not_equals) {
-    return { "not-equals": op.not_equals };
-  } else {
-    return { ...op } as SingleKey<TextOperators>;
-  }
-}
+import { modelCost } from "../../metrics/costCalc";
+import { convertTextOperators, convertTimeOperators } from "./helper";
 
 const filterInputToFilterLeaf: {
   [key in keyof HeliconeRequestFilter]: (
     filter: HeliconeRequestFilter[key]
   ) => FilterLeaf | undefined;
 } = {
+  feedback: (feedback) => {
+    if (
+      feedback === undefined ||
+      feedback === null ||
+      feedback.rating === null
+    ) {
+      return undefined;
+    }
+    return {
+      feedback: {
+        rating: {
+          equals: feedback.rating,
+        },
+      },
+    };
+  },
+  requestId: (requestId) => {
+    if (requestId === undefined || requestId === null) {
+      return undefined;
+    }
+    return {
+      request: {
+        id: convertTextOperators(requestId),
+      },
+    };
+  },
   property: (property) => {
     if (property === undefined || property === null) {
       return undefined;
@@ -61,6 +75,26 @@ const filterInputToFilterLeaf: {
       },
     };
   },
+  user: (user) => {
+    if (user === undefined || user === null) {
+      return undefined;
+    }
+    return {
+      request: {
+        user_id: convertTextOperators(user),
+      },
+    };
+  },
+  createdAt: (createdAt) => {
+    if (createdAt === undefined || createdAt === null) {
+      return undefined;
+    }
+    return {
+      request: {
+        created_at: convertTimeOperators(createdAt),
+      },
+    };
+  },
 };
 
 function convertFilterInputToFilterLeaf(
@@ -80,12 +114,12 @@ function convertFilterInputToFilterLeaf(
 }
 
 export async function heliconeRequest(
-  root: any,
+  _root: any,
   args: QueryHeliconeRequestArgs,
   context: Context,
-  info: any
+  _info: any
 ): Promise<HeliconeRequest[]> {
-  const userId = await getUserOrThrow(context.auth);
+  const orgId = await context.getOrgIdOrThrow();
   const { limit, offset, filters } = {
     limit: args.limit ?? 100,
     offset: args.offset ?? 0,
@@ -98,7 +132,10 @@ export async function heliconeRequest(
   );
   const filter = filterListToTree(convertedFilters, "and");
 
-  const { data, error } = await getRequests(userId, filter, offset, limit, {});
+  const { data, error } = await getRequests(orgId, filter, offset, limit, {
+    created_at: "desc",
+  });
+
   if (error !== null) {
     throw new ApolloError(error, "UNAUTHENTICATED");
   }
@@ -106,6 +143,13 @@ export async function heliconeRequest(
   return data.map((r) => ({
     id: r.request_id,
     createdAt: r.request_created_at,
+    model: r.response_body?.model ?? r.request_body?.model ?? null,
+    costUSD: modelCost({
+      model: r.response_body?.model ?? r.request_body?.model ?? null,
+      sum_completion_tokens: r.completion_tokens ?? 0,
+      sum_prompt_tokens: r.prompt_tokens ?? 0,
+      sum_tokens: (r.total_tokens ?? 0) + (r.completion_tokens ?? 0),
+    }),
     prompt: r.request_prompt,
     response: r.response_prompt,
     user: r.request_user_id
@@ -113,7 +157,6 @@ export async function heliconeRequest(
           id: r.request_user_id,
         }
       : null,
-    cacheHits: r.cache_count,
     properties: r.request_properties
       ? Object.entries(r.request_properties).map(([k, v]) => ({
           name: k,
@@ -128,5 +171,11 @@ export async function heliconeRequest(
       : [],
     requestBody: r.request_body,
     responseBody: r.response_body,
+    latency: r.delay_ms,
+    feedback: r.feedback_rating
+      ? {
+          rating: r.feedback_rating,
+        }
+      : undefined,
   }));
 }

@@ -1,13 +1,12 @@
-import { createServerSupabaseClient } from "@supabase/auth-helpers-nextjs";
-import { NextApiRequest, NextApiResponse } from "next";
+import { MetricsBackendBody } from "../../../services/hooks/useBackendFunction";
 import {
   FilterLeaf,
-  filterListToTree,
   FilterNode,
 } from "../../../services/lib/filters/filterDefs";
 import { Result } from "../../result";
 import { TimeIncrement } from "../../timeCalculations/fetchTimeData";
 import { timeBackfill } from "../../timeCalculations/time";
+import { HandlerWrapperOptions } from "../handlerWrappers";
 
 export interface DataOverTimeRequest {
   timeFilter: {
@@ -15,7 +14,7 @@ export interface DataOverTimeRequest {
     end: string;
   };
   userFilter: FilterNode;
-  userId: string;
+  orgId: string;
   dbIncrement: TimeIncrement;
   timeZoneDifference: number;
 }
@@ -59,47 +58,33 @@ export async function getSomeDataOverTime<T, K>(
 }
 
 export async function getTimeDataHandler<T>(
-  req: NextApiRequest,
-  res: NextApiResponse<Result<T[], string>>,
+  options: HandlerWrapperOptions<Result<T[], string>>,
   dataExtractor: (d: DataOverTimeRequest) => Promise<Result<T[], string>>
 ) {
-  const client = createServerSupabaseClient({ req, res });
-  const user = await client.auth.getUser();
-  if (!user.data || !user.data.user) {
-    res.status(401).json({ error: "Unauthorized", data: null });
-    return;
-  }
-  const { timeFilter, userFilters, dbIncrement, timeZoneDifference } =
-    req.body as OverTimeRequestQueryParams;
+  const {
+    req,
+    res,
+    userData: { orgId },
+  } = options;
+
+  const {
+    timeFilter,
+    filter: userFilters,
+    dbIncrement,
+    timeZoneDifference,
+  } = req.body as MetricsBackendBody;
   if (!timeFilter || !userFilters || !dbIncrement) {
-    res.status(400).json({ error: "Bad request", data: null });
+    res.status(400).json({
+      error: "Bad request, filters or inc not there" + JSON.stringify(req.body),
+      data: null,
+    });
     return;
   }
 
   const metrics = await dataExtractor({
     timeFilter,
-    userFilter: {
-      left: filterListToTree(userFilters, "and"),
-      operator: "and",
-      right: {
-        left: {
-          request: {
-            created_at: {
-              gte: timeFilter.start,
-            },
-          },
-        },
-        operator: "and",
-        right: {
-          request: {
-            created_at: {
-              lte: timeFilter.end,
-            },
-          },
-        },
-      },
-    },
-    userId: user.data.user.id,
+    userFilter: userFilters,
+    orgId,
     dbIncrement,
     timeZoneDifference,
   });

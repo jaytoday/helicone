@@ -1,17 +1,14 @@
-import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
+import { useUser } from "@supabase/auth-helpers-react";
+import { GetServerSidePropsContext } from "next";
 import { useRouter } from "next/router";
-import AuthLayout from "../components/shared/layout/authLayout";
-import BasePageV2 from "../components/shared/layout/basePageV2";
+
 import LoadingAnimation from "../components/shared/loadingAnimation";
-import MetaData from "../components/shared/metaData";
-import HomePage from "../components/templates/home/homePage";
 import { DEMO_EMAIL } from "../lib/constants";
-import { redirectIfLoggedIn } from "../lib/redirectIdLoggedIn";
+import { SupabaseServerWrapper } from "../lib/wrappers/supabase";
+import HomePageV2 from "../components/templates/home/homePageV2";
+import Head from "next/head";
 
-interface HomeProps {}
-
-const Home = (props: HomeProps) => {
-  const {} = props;
+export const Home = () => {
   const router = useRouter();
 
   const user = useUser();
@@ -19,17 +16,52 @@ const Home = (props: HomeProps) => {
   if (user && user.email !== DEMO_EMAIL) {
     router.push("/dashboard");
     return (
-      <AuthLayout user={user}>
+      <div className="h-screen justify-center items-center flex">
         <LoadingAnimation title="Redirecting you to your dashboard..." />
-      </AuthLayout>
+      </div>
     );
   }
 
   return (
-    <MetaData title="Home">
-      <HomePage />
-    </MetaData>
+    <>
+      <Head>
+        <title>{`Helicone - The easiest way to monitor your LLM-application at scale`}</title>
+        <link rel="icon" href="/assets/landing/helicone-mobile.webp" />
+        <meta
+          property="og:title"
+          content={
+            "Helicone - The easiest way to monitor your LLM-application at scale"
+          }
+        />
+        <meta
+          property="og:description"
+          name="description"
+          content="Monitoring usage and costs for language models shouldn't be a hassle. With Helicone, you can focus on building your product, not building and maintaining your own analytics solution."
+          key="desc"
+        />
+        <meta
+          property="og:image"
+          content={
+            "https://www.helicone.ai/_next/image?url=%2Fassets%2Flanding%2Fhelicone-mobile.webp&w=384&q=75"
+          }
+        />
+      </Head>
+      <HomePageV2 />
+    </>
   );
 };
 
 export default Home;
+
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const supabase = new SupabaseServerWrapper(context).getClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  return {
+    props: {},
+  };
+};

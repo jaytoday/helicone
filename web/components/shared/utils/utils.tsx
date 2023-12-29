@@ -20,13 +20,28 @@ const getUSDateShort = (value: string) => {
   return `${month} ${day}`;
 };
 
-const getUSDate = (value: string) => {
+const getUSDate = (date: Date) => {
+  const options: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  };
+
+  let formattedDate = date.toLocaleString("en-US", options);
+  // Remove the year and 'at' from the string
+  formattedDate = formattedDate
+    .replace(", " + date.getFullYear(), "")
+    .replace(" at", "");
+
+  return formattedDate;
+};
+
+const getUSDateFromString = (value: string) => {
   const date = new Date(value);
-  const month = monthNames[date.getMonth()];
-  const day = date.getDate();
-  return `${month} ${day}, ${date.toLocaleTimeString().slice(0, -6)} ${date
-    .toLocaleTimeString()
-    .slice(-2)}`;
+  return getUSDate(date);
 };
 
 const getUSDateMin = (value: string) => {
@@ -56,11 +71,13 @@ const capitalizeWords = (str: string) => {
   return capitalizedWords.join(" ");
 };
 
-function removeLeadingWhitespace(str: string): string {
+function removeLeadingWhitespace(str: string | null): string {
+  if (typeof str !== "string") return "";
   return str.replace(/^\s+/, ""); // Replace one or more whitespace characters at the beginning of the string with an empty string
 }
 
 export {
+  getUSDateFromString,
   getUSDate,
   getUSDateShort,
   capitalizeWords,

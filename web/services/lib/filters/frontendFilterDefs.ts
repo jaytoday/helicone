@@ -1,10 +1,6 @@
 import {
-  FilterLeaf,
-  FilterLeafRequest,
-  FilterLeafResponse,
-  FilterLeafUserMetrics,
+  BooleanOperators,
   NumberOperators,
-  RequestTableToOperators,
   TablesAndViews,
   TextOperators,
   TimestampOperators,
@@ -14,7 +10,8 @@ export type ColumnType =
   | "text"
   | "timestamp"
   | "number"
-  | "text-with-suggestions";
+  | "text-with-suggestions"
+  | "bool";
 
 export type InputParam = {
   key: string;
@@ -29,27 +26,27 @@ interface Operator<T> {
 const textOperators: Operator<keyof TextOperators>[] = [
   {
     value: "equals",
-    label: "=",
+    label: "equals",
     type: "text",
   },
   {
     value: "not-equals",
-    label: "!=",
+    label: "not equals",
     type: "text",
   },
   {
     value: "contains",
-    label: "CONTAINS",
+    label: "contains",
     type: "text",
   },
   {
     value: "ilike",
-    label: "ILIKE",
+    label: "ilike",
     type: "text",
   },
   {
     value: "like",
-    label: "LIKE",
+    label: "like",
     type: "text",
   },
 ];
@@ -57,35 +54,43 @@ const textOperators: Operator<keyof TextOperators>[] = [
 const numberOperators: Operator<keyof NumberOperators>[] = [
   {
     value: "equals",
-    label: "=",
+    label: "equals",
     type: "number",
   },
   {
     value: "not-equals",
-    label: "!=",
+    label: "not equals",
     type: "text",
   },
   {
     value: "gte",
-    label: ">=",
+    label: "greater than or equal to",
     type: "number",
   },
   {
     value: "lte",
-    label: "<=",
+    label: "less than or equal to",
     type: "number",
+  },
+];
+
+const booleanOperators: Operator<keyof BooleanOperators>[] = [
+  {
+    value: "equals",
+    label: "equals",
+    type: "bool",
   },
 ];
 
 const timestampOperators: Operator<keyof TimestampOperators>[] = [
   {
     value: "gte",
-    label: ">=",
+    label: "greater than or equal to",
     type: "timestamp",
   },
   {
     value: "lte",
-    label: "<=",
+    label: "less than or equal to",
     type: "timestamp",
   },
 ];
@@ -99,14 +104,57 @@ export type SingleFilterDef<T extends keyof TablesAndViews> = {
   category: string;
 };
 
-export const requestTableFilters: [
+export const DASHBOARD_PAGE_TABLE_FILTERS: [
+  SingleFilterDef<"response_copy_v3">,
+  SingleFilterDef<"response_copy_v3">,
+  SingleFilterDef<"response_copy_v3">,
+  SingleFilterDef<"response_copy_v3">,
+  SingleFilterDef<"response_copy_v3">
+] = [
+  {
+    label: "Model",
+    operators: textOperators,
+    category: "request",
+    table: "response_copy_v3",
+    column: "model",
+  },
+  {
+    label: "Status",
+    operators: numberOperators,
+    category: "request",
+    table: "response_copy_v3",
+    column: "status",
+  },
+  {
+    label: "Latency",
+    operators: numberOperators,
+    category: "request",
+    table: "response_copy_v3",
+    column: "latency",
+  },
+  {
+    label: "User",
+    operators: textOperators,
+    category: "request",
+    table: "response_copy_v3",
+    column: "user_id",
+  },
+  {
+    label: "Feedback",
+    operators: booleanOperators,
+    category: "feedback",
+    table: "response_copy_v3",
+    column: "rating",
+  },
+];
+export const REQUEST_TABLE_FILTERS: [
   SingleFilterDef<"request">,
   SingleFilterDef<"response">,
   SingleFilterDef<"response">,
   SingleFilterDef<"request">,
   SingleFilterDef<"response">,
-  SingleFilterDef<"user_api_keys">,
-  SingleFilterDef<"response">
+  SingleFilterDef<"response">,
+  SingleFilterDef<"feedback">
 ] = [
   {
     label: "Request",
@@ -144,94 +192,77 @@ export const requestTableFilters: [
     category: "request",
   },
   {
-    label: "Key Name",
-    operators: textOperators,
-    table: "user_api_keys",
-    column: "api_key_name",
-    category: "request",
-  },
-  {
     label: "Status",
     operators: numberOperators,
     category: "response",
     table: "response",
     column: "status",
   },
+  {
+    label: "Feedback",
+    operators: booleanOperators,
+    table: "feedback",
+    column: "rating",
+    category: "feedback",
+  },
 ];
 
 export const userTableFilters: [
-  SingleFilterDef<"user_metrics">,
-  SingleFilterDef<"user_metrics">,
-  SingleFilterDef<"user_metrics">,
-  SingleFilterDef<"request">,
-  SingleFilterDef<"request">,
-  SingleFilterDef<"response">,
-  SingleFilterDef<"response">,
-  SingleFilterDef<"request">,
-  SingleFilterDef<"response">
+  SingleFilterDef<"users_view">,
+  SingleFilterDef<"users_view">,
+  SingleFilterDef<"users_view">,
+  SingleFilterDef<"users_view">,
+  SingleFilterDef<"users_view">,
+  SingleFilterDef<"response_copy_v1">,
+  SingleFilterDef<"response_copy_v1">
 ] = [
   {
     label: "ID",
     operators: textOperators,
-    table: "user_metrics",
+    table: "users_view",
     column: "user_id",
+    category: "user",
+  },
+  {
+    label: "Active For",
+    operators: numberOperators,
+    table: "users_view",
+    column: "active_for",
     category: "user",
   },
   {
     label: "Last Active",
-    operators: textOperators,
-    table: "user_metrics",
+    operators: timestampOperators,
+    table: "users_view",
     column: "last_active",
     category: "user",
   },
   {
-    label: "Requests",
+    label: "Request Count",
     operators: numberOperators,
-    table: "user_metrics",
+    table: "users_view",
     column: "total_requests",
     category: "user",
   },
-
+  {
+    label: "Cost",
+    operators: numberOperators,
+    table: "users_view",
+    column: "cost",
+    category: "user",
+  },
   {
     label: "Created At",
     operators: timestampOperators,
-    table: "request",
-    column: "created_at",
+    table: "response_copy_v1",
+    column: "request_created_at",
     category: "request",
   },
   {
-    label: "Prompt",
-    operators: textOperators,
-    table: "request",
-    column: "prompt",
-    category: "request",
-  },
-  {
-    label: "Completion",
-    operators: textOperators,
-    table: "response",
-    column: "body_completion",
-    category: "request",
-  },
-  {
-    label: "Total Tokens",
+    label: "Status",
     operators: numberOperators,
-    table: "response",
-    column: "body_tokens",
-    category: "request",
-  },
-  {
-    label: "User ID",
-    operators: textOperators,
-    table: "request",
-    column: "user_id",
-    category: "request",
-  },
-  {
-    label: "Model",
-    operators: textOperators,
-    table: "response",
-    column: "body_model",
+    table: "response_copy_v1",
+    column: "status",
     category: "request",
   },
 ];

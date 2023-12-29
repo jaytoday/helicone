@@ -1,24 +1,22 @@
+import { FilterNode } from "../../../services/lib/filters/filterDefs";
+import { buildFilterWithAuth } from "../../../services/lib/filters/filters";
 import { Result } from "../../result";
 import { dbExecute } from "../db/dbExecute";
-import {
-  buildFilter,
-  buildFilterWithAuth,
-} from "../../../services/lib/filters/filters";
-import { FilterNode } from "../../../services/lib/filters/filterDefs";
 
 export interface CreatedAt {
   created_at: number;
 }
+
 export async function getXRequestDate(
   filter: FilterNode,
-  user_id: string,
+  org_id: string,
   first: boolean
 ): Promise<Result<Date, string>> {
-  const { filter: filterString, argsAcc } = await buildFilterWithAuth(
-    user_id,
+  const { filter: filterString, argsAcc } = await buildFilterWithAuth({
     filter,
-    []
-  );
+    argsAcc: [],
+    org_id,
+  });
   const query = `
 SELECT 
   request.created_at

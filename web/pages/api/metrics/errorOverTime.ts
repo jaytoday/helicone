@@ -1,27 +1,49 @@
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-import { modelCost } from "../../../lib/api/metrics/costCalc";
-import { getErrorOverTime } from "../../../lib/api/metrics/getErrorOverTime";
-
 import {
-  getSomeDataOverTime,
-  getTimeDataHandler,
-} from "../../../lib/api/metrics/timeDataHandlerWrapper";
+  HandlerWrapperOptions,
+  withAuth,
+} from "../../../lib/api/handlerWrappers";
+import { getTotalRequestsOverTime } from "../../../lib/api/metrics/getRequestOverTime";
 import { Result } from "../../../lib/result";
+import { MetricsBackendBody } from "../../../services/hooks/useBackendFunction";
 
 export interface ErrorOverTime {
   count: number;
   time: Date;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<Result<ErrorOverTime[], string>>
+async function handler(
+  options: HandlerWrapperOptions<Result<ErrorOverTime[], string>>
 ) {
-  await getTimeDataHandler(req, res, (d) =>
-    getSomeDataOverTime(d, getErrorOverTime, {
-      reducer: (acc, d) => ({ count: acc.count + d.count }),
-      initial: { count: 0 },
+  const {
+    res,
+    userData: { orgId },
+  } = options;
+  const {
+    timeFilter,
+    filter: userFilters,
+    dbIncrement,
+    timeZoneDifference,
+  } = options.req.body as MetricsBackendBody;
+
+  res.status(200).json(
+    await getTotalRequestsOverTime({
+      timeFilter,
+      userFilter: {
+        left: userFilters,
+        operator: "and",
+        right: {
+          response_copy_v3: {
+            status: {
+              "not-equals": 200,
+            },
+          },
+        },
+      },
+      orgId,
+      dbIncrement: dbIncrement ?? "hour",
+      timeZoneDifference,
     })
   );
 }
+
+export default withAuth(handler);

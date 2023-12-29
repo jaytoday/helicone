@@ -1,44 +1,56 @@
 import { Transition } from "@headlessui/react";
+
+import { useEffect, useState } from "react";
+import { clsx } from "../clsx";
+import useNotification from "./useNotification";
 import {
-  CheckBadgeIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
   InformationCircleIcon,
-  MegaphoneIcon,
   XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { Fragment, useEffect, useState } from "react";
-import { clsx } from "../clsx";
-import useNotification from "./useNotification";
+} from "@heroicons/react/20/solid";
 
 const Notification = () => {
-  const { variant, title, setNotification } = useNotification();
+  const { variant, title } = useNotification();
 
   const [show, setShow] = useState(true);
 
   const variantBgColor = () => {
     switch (variant) {
       case "success":
-        return "bg-green-500";
+        return "bg-green-100";
       case "info":
-        return "bg-yellow-500";
+        return "bg-yellow-100";
       case "error":
-        return "bg-red-500";
+        return "bg-red-100";
       default:
-        return "bg-green-500";
+        return "bg-green-100";
     }
   };
 
-  const variantIconBgColor = () => {
+  const variantTextColor = () => {
     switch (variant) {
       case "success":
-        return "bg-green-600";
+        return "text-green-700";
       case "info":
-        return "bg-yellow-600";
+        return "text-yellow-700";
       case "error":
-        return "bg-red-600";
+        return "text-red-700";
       default:
-        return "bg-green-600";
+        return "text-green-700";
+    }
+  };
+
+  const variantBorderColor = () => {
+    switch (variant) {
+      case "success":
+        return "border-green-200";
+      case "info":
+        return "border-yellow-200";
+      case "error":
+        return "border-red-200";
+      default:
+        return "border-green-200";
     }
   };
 
@@ -46,19 +58,22 @@ const Notification = () => {
     switch (variant) {
       case "success":
         return (
-          <CheckCircleIcon className="h-5 w-5 text-white" aria-hidden="true" />
+          <CheckCircleIcon
+            className="h-5 w-5 text-green-400"
+            aria-hidden="true"
+          />
         );
       case "info":
         return (
           <InformationCircleIcon
-            className="h-5 w-5 text-white"
+            className="h-5 w-5 text-yelow-400"
             aria-hidden="true"
           />
         );
       case "error":
         return (
           <ExclamationCircleIcon
-            className="h-5 w-5 text-white"
+            className="h-5 w-5 text-red-400"
             aria-hidden="true"
           />
         );
@@ -73,59 +88,60 @@ const Notification = () => {
     setShow(true);
   }, [variant, title]);
 
-  if (variant && title && show) {
-    return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 pb-8 pt-0 sm:pb-0 sm:top-0 sm:pt-6 z-30">
-        <div className="mx-auto max-w-sm px-2 sm:px-6 lg:px-8">
-          <Transition
-            show={show}
-            as={Fragment}
-            enter="transform ease-out duration-500 transition"
-            enterFrom="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-            enterTo="translate-y-0 opacity-100 sm:translate-x-0"
-            leave="transition ease-in duration-500"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
+  return (
+    <Transition
+      show={(variant && title && show) || false}
+      enter="transition-opacity duration-300"
+      enterFrom="opacity-0"
+      enterTo="opacity-100"
+      leave="transition-opacity duration-150"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
+    >
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 pb-8 pt-0 sm:pb-0 sm:top-0 sm:pt-6 z-50">
+        <div className="mx-auto w-full sm:max-w-[33vw] px-2 sm:px-6 lg:px-8">
+          <div
+            className={clsx(
+              variantBgColor(),
+              variantBorderColor(),
+              "rounded-lg px-2 py-1 shadow-xl border"
+            )}
           >
-            <div
-              className={clsx(
-                variantBgColor(),
-                "rounded-lg px-2 py-1 shadow-lg"
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between">
-                <div className="flex w-0 flex-1 items-center">
-                  <span className="flex rounded-lg p-2">{variantIcon()}</span>
-                  <p className="ml-3 truncate font-medium text-white text-sm">
-                    <span>{title}</span>
-                  </p>
-                </div>
-                {/* <div className="order-2 flex-shrink-0 sm:order-3 sm:ml-2">
+            <div className="flex flex-wrap items-center justify-between">
+              <div className="flex w-0 flex-1 items-center">
+                <span className="flex rounded-lg p-2">{variantIcon()}</span>
+                <p
+                  className={clsx(
+                    variantTextColor(),
+                    "ml-3 font-medium text-sm py-1"
+                  )}
+                >
+                  <span>{title}</span>
+                </p>
+              </div>
+              <div className="ml-auto mr-2">
+                <div className="-mx-1.5 -my-1.5">
                   <button
-                    tabIndex={-1}
-                    onClick={() => setShow(false)}
-                    type="button"
+                    onClick={() => {
+                      alert("clicked");
+                    }}
                     className={clsx(
-                      `hover:${variantIconBgColor()}`,
-                      "-mr-1 flex rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-white"
+                      variantBgColor(),
+                      variantTextColor(),
+                      "inline-flex rounded-md p-1.5 hover:cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-green-50"
                     )}
                   >
                     <span className="sr-only">Dismiss</span>
-                    <XMarkIcon
-                      className="h-5 w-5 text-white"
-                      aria-hidden="true"
-                    />
+                    <XMarkIcon className="h-5 w-5" aria-hidden="true" />
                   </button>
-                </div> */}
+                </div>
               </div>
             </div>
-          </Transition>
+          </div>
         </div>
       </div>
-    );
-  } else {
-    return <></>;
-  }
+    </Transition>
+  );
 };
 
 export default Notification;
